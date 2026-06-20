@@ -2,14 +2,28 @@
 MAKEFLAGS += -rR --silent
 .SUFFIXES:
 
-MLIBC_URL    := https://github.com/shoenot/mlibc.git
-MLIBC_BRANCH := vespertine
+# --- SUBMODULE CONFIGURATION ---
+# Add any new submodule folder names here (space-separated) to automatically pull them
+TRACKED_SUBMODULES := mlibc zlib
+
 PREFIX       := $(abspath ../target/build_deps/disk/System)
 PROGRAMS_DIR := $(abspath ../target/build_deps/disk/Programs)
 CLANG_CONFIG := $(abspath x86_64-vespertine.cfg)
 
 .PHONY: all
-all: mlibc ports
+all: update-submodules mlibc ports
+
+# Automatically initializes, syncs, and updates tracked submodules to their remote branches
+.PHONY: update-submodules
+update-submodules:
+	echo "[INFO] Syncing and updating submodules..."
+	git submodule update --init --recursive
+	for sub in $(TRACKED_SUBMODULES); do \
+		if [ -d "$$sub" ]; then \
+			echo "[INFO] Updating submodule tracking for: $$sub"; \
+			git submodule update --remote --merge "$$sub"; \
+		fi \
+	done
 
 .PHONY: mlibc
 mlibc: mlibc/build/build.ninja
@@ -29,10 +43,11 @@ mlibc/build/build.ninja: mlibc/meson.build
 		-Dlibgcc_dependency=false \
 		-Ddefault_library=shared
 
+# Target relies on the submodule directory existing via 'update-submodules'
 mlibc/meson.build:
-	if [ ! -d mlibc ]; then \
-		echo "[INFO] Cloning mlibc fork"; \
-		git clone $(MLIBC_URL) -b $(MLIBC_BRANCH) mlibc; \
+	@if [ ! -f mlibc/meson.build ]; then \
+		echo "[ERROR] mlibc source files are missing. Ensure submodules are initialized."; \
+		exit 1; \
 	fi
 
 .PHONY: ports
@@ -57,7 +72,6 @@ ls:
 .PHONY: wc
 wc:
 	echo "[INFO] Building port: wc"
-	mkdir -p $(PROGRAMS_DIR)
 	clang --config $(abspath x86_64-vespertine.cfg) -o $(PROGRAMS_DIR)/wc wc/wc.c
 
 .PHONY: cowsay
@@ -86,3 +100,4 @@ zlib:
 .PHONY: clean
 clean:
 	rm -rf mlibc/build
+
