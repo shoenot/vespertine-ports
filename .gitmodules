@@ -1,0 +1,10 @@
+[submodule "ports/zlib"]
+	path = ports/zlib
+	url = https://github.com/madler/zlib
+[submodule "zlib"]
+	path = zlib
+	url = https://github.com/madler/zlib
+[submodule "mlibc"]
+	path = mlibc
+	url = https://github.com/shoenot/mlibc.git
+	branch = vespertine
