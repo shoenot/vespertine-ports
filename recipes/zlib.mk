@@ -19,8 +19,12 @@ SRCS := \
 
 OBJS := $(SRCS:.c=.o)
 
+CC ?= cc
+AR ?= ar
+RANLIB ?= ranlib
+
+CPPFLAGS +=
 CFLAGS += -O2 -fPIC -Wall
-AR := llvm-ar
 
 .PHONY: all clean
 
@@ -28,6 +32,7 @@ all: $(LIB)
 
 $(LIB): $(OBJS)
 	$(AR) rcs $@ $(OBJS)
+	$(RANLIB) $@
 
 %.o: %.c zlib.h zconf.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<

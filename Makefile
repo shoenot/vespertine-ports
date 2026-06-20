@@ -11,19 +11,16 @@ PROGRAMS_DIR := $(abspath ../target/build_deps/disk/Programs)
 CLANG_CONFIG := $(abspath x86_64-vespertine.cfg)
 
 .PHONY: all
-all: update-submodules mlibc ports
+all: update-mlibc mlibc ports
 
-# Automatically initializes, syncs, and updates tracked submodules to their remote branches
-.PHONY: update-submodules
-update-submodules:
-	echo "[INFO] Syncing and updating submodules..."
+.PHONY: update-mlibc
+update-mlibc:
+	echo "[INFO] Syncing and updating mlibc..."
 	git submodule update --init --recursive
-	for sub in $(TRACKED_SUBMODULES); do \
-		if [ -d "$$sub" ]; then \
-			echo "[INFO] Updating submodule tracking for: $$sub"; \
-			git submodule update --remote --merge "$$sub"; \
-		fi \
-	done
+	if [ -d "mlibc" ]; then \
+		echo "[INFO] Updating submodule tracking for: mlibc"; \
+		git submodule update --remote --merge "mlibc"; \
+	fi \
 
 .PHONY: mlibc
 mlibc: mlibc/build/build.ninja
@@ -52,6 +49,19 @@ mlibc/meson.build:
 
 .PHONY: ports
 ports: cowsay kilo wc ls grep
+
+.PHONY: zlib
+zlib:
+	echo "[INFO] Building port: zlib"
+	$(MAKE) -C zlib -f ../recipes/zlib.mk \
+		CC='clang --config $(CLANG_CONFIG)' \
+		AR=llvm-ar \
+		RANLIB=llvm-ranlib
+	mkdir -p $(PREFIX)/Libraries
+	mkdir -p $(PREFIX)/Headers
+	cp zlib/libz.a $(PREFIX)/Libraries/libz.a
+	cp zlib/zlib.h $(PREFIX)/Headers/zlib.h
+	cp zlib/zconf.h $(PREFIX)/Headers/zconf.h
 
 .PHONY: grep
 grep: zlib
@@ -85,17 +95,6 @@ kilo:
 	echo "[INFO] Building port: kilo"
 	mkdir -p $(PROGRAMS_DIR)
 	clang --config $(abspath x86_64-vespertine.cfg) -o $(PROGRAMS_DIR)/kilo kilo/kilo.c
-
-.PHONY: zlib
-zlib:
-	echo "[INFO] Building port: zlib"
-	$(MAKE) -C zlib \
-		CC='clang --config $(CLANG_CONFIG)'
-	mkdir -p $(PREFIX)/Libraries
-	mkdir -p $(PREFIX)/Headers
-	cp zlib/libz.a $(PREFIX)/Libraries/libz.a
-	cp zlib/zlib.h $(PREFIX)/Headers/zlib.h
-	cp zlib/zconf.h $(PREFIX)/Headers/zconf.h
 
 .PHONY: clean
 clean:
