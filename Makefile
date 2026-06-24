@@ -6,12 +6,17 @@ MAKEFLAGS += -rR --silent
 # Add any new submodule folder names here (space-separated) to automatically pull them
 TRACKED_SUBMODULES := mlibc zlib
 
-PREFIX       := $(abspath ../target/build_deps/disk/System)
-PROGRAMS_DIR := $(abspath ../target/build_deps/disk/Programs)
+ASSETS_ROOT  := $(abspath ../assets/disk)
+PREFIX       := $(ASSETS_ROOT)/System
 CLANG_CONFIG := $(abspath x86_64-vespertine.cfg)
 
+# A launchable port opts into application packaging by providing a
+# vespertine.mk file. Upstream Makefiles and GNUmakefiles remain untouched.
+PORT_APPS := $(sort $(patsubst %/vespertine.mk,%,$(wildcard */vespertine.mk)))
+PORT_PACKAGES := $(addprefix package-,$(PORT_APPS))
+
 .PHONY: all
-all: update-mlibc mlibc ports
+all: ports
 
 .PHONY: update-mlibc
 update-mlibc:
@@ -23,11 +28,11 @@ update-mlibc:
 	fi \
 
 .PHONY: mlibc
-mlibc: mlibc/build/build.ninja
+mlibc: update-mlibc mlibc/build/build.ninja
 	echo "[INFO] Building mlibc"
 	ninja -C mlibc/build
 	echo "[INFO] Installing mlibc"
-	DESTDIR=$(abspath ../target/build_deps/disk) ninja -C mlibc/build install
+	DESTDIR=$(ASSETS_ROOT) ninja -C mlibc/build install
 
 mlibc/build/build.ninja: mlibc/meson.build
 	echo "[INFO] Configuring mlibc"
@@ -47,8 +52,16 @@ mlibc/meson.build:
 		exit 1; \
 	fi
 
-.PHONY: ports
-ports: cowsay kilo wc ls grep
+.PHONY: ports $(PORT_PACKAGES)
+ports: mlibc $(PORT_PACKAGES)
+
+$(PORT_PACKAGES): mlibc
+
+$(PORT_PACKAGES): package-%:
+	echo "[INFO] Packaging port application: $*"
+	$(MAKE) -C $* -f vespertine.mk package \
+		ASSETS_ROOT='$(ASSETS_ROOT)' \
+		CLANG_CONFIG='$(CLANG_CONFIG)'
 
 .PHONY: zlib
 zlib:
@@ -63,40 +76,15 @@ zlib:
 	cp zlib/zlib.h $(PREFIX)/Headers/zlib.h
 	cp zlib/zconf.h $(PREFIX)/Headers/zconf.h
 
-.PHONY: grep
-grep: zlib
-	echo "[INFO] Building port: grep"
-	mkdir -p $(PROGRAMS_DIR)
-	$(MAKE) -C grep \
-		CC='clang --config $(CLANG_CONFIG)'
-	cp grep/grep $(PROGRAMS_DIR)/grep
-
-.PHONY: ls
-ls:
-	echo "[INFO] Building port: ls"
-	mkdir -p $(PROGRAMS_DIR)
-	$(MAKE) -C ls \
-		CC='clang --config $(CLANG_CONFIG)'
-	cp ls/ls $(PROGRAMS_DIR)/ls
-
-.PHONY: wc
-wc:
-	echo "[INFO] Building port: wc"
-	clang --config $(abspath x86_64-vespertine.cfg) -o $(PROGRAMS_DIR)/wc wc/wc.c
-
-.PHONY: cowsay
-cowsay:
-	echo "[INFO] Building port: cowsay"
-	mkdir -p $(PROGRAMS_DIR)
-	clang --config $(abspath x86_64-vespertine.cfg) -o $(PROGRAMS_DIR)/cowsay cowsay/cowsay.c
-
-.PHONY: kilo
-kilo:
-	echo "[INFO] Building port: kilo"
-	mkdir -p $(PROGRAMS_DIR)
-	clang --config $(abspath x86_64-vespertine.cfg) -o $(PROGRAMS_DIR)/kilo kilo/kilo.c
+# grep links against the separately installed zlib system library.
+package-grep: zlib
 
 .PHONY: clean
 clean:
 	rm -rf mlibc/build
-
+	for app in $(PORT_APPS); do \
+		$(MAKE) -C $$app -f vespertine.mk clean || exit 1; \
+	done
+	if [ -d zlib ]; then \
+		$(MAKE) -C zlib -f ../recipes/zlib.mk clean; \
+	fi
